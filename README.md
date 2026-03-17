@@ -2,7 +2,7 @@
 
 > 마지막까지 살아남은 공이 당첨되는 물리 기반 추첨기
 
-라이브 데모 → [링크](https://Kor-sh.github.io/roll/)
+라이브 데모 → [test7.site](https://test7.site/)
 
 ---
 
