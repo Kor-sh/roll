@@ -1,0 +1,449 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>구슬 룰렛</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{width:100%;height:100%;overflow:hidden}
+canvas{display:block;position:fixed;inset:0}
+#ui{position:fixed;bottom:28px;left:50%;transform:translateX(-50%);display:flex;gap:10px;align-items:center;z-index:10}
+#startBtn{padding:11px 34px;font-size:13px;font-weight:700;border:none;border-radius:6px;cursor:pointer;font-family:system-ui;letter-spacing:.05em}
+#startBtn:active{opacity:.8}
+#winnerBadge{padding:9px 20px;border-radius:6px;border:2px solid;font-size:14px;font-weight:700;font-family:system-ui;display:none;background:rgba(8,8,20,.9)}
+#nameInput{
+  position:fixed;top:20px;left:20px;
+  width:220px;height:80px;
+  background:rgba(0,0,0,.7);
+  border:1px solid #333;
+  border-radius:6px;
+  color:#fff;
+  font-size:13px;
+  font-family:system-ui;
+  padding:8px;
+  resize:none;
+  outline:none;
+  z-index:10;
+  line-height:1.6;
+}
+#nameInput:focus{border-color:#555}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<textarea id="nameInput" placeholder="이름 입력&#10;띄어쓰기로 구분&#10;1~3 → 1 2 3">1~34</textarea>
+<div id="ui">
+  <button id="startBtn">▶ START</button>
+  <div id="winnerBadge"></div>
+</div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/matter-js/0.19.0/matter.min.js"></script>
+<script>
+const fvColor = '#FFFFFF'
+function wallByAngle(cx, cy, length, angleDeg, color, thickness) {
+  const rad = angleDeg * Math.PI / 180;
+  const hx  = Math.cos(rad) * length / 2;
+  const hy  = Math.sin(rad) * length / 2;
+  return {x1: cx-hx, y1: cy-hy, x2: cx+hx, y2: cy+hy, color, thickness};
+}
+function parseNames(raw) {
+  const tokens = raw.trim().split(/\s+/).filter(Boolean);
+  const result = [];
+  tokens.forEach(t => {
+    const m = t.match(/^(\d+)~(\d+)$/);
+    if (m) {
+      const a = +m[1], b = +m[2];
+      const step = a <= b ? 1 : -1;
+      for (let i = a; i !== b + step; i += step) result.push(String(i));
+    } else {
+      result.push(t);
+    }
+  });
+  return result;
+}
+function makeBalls(names) {
+  const shuffled = [...names].sort(() => Math.random() - 0.5);
+  const n = shuffled.length;
+  const spacing = 50;
+  const perRow = 10;
+  const totalW = (Math.min(n, perRow) - 1) * spacing;
+  return shuffled.map((name, i) => ({
+    name,
+    spawnX: -totalW / 2 + (i % perRow) * spacing + Math.random() * 4 - 2,
+    spawnY: -Math.floor(i / perRow) * spacing + Math.random() * 4 - 2,
+    color: `hsl(${Math.round(360 / n * i)}, 85%, 68%)`,
+  }));
+}
+let CONFIG = {
+  bgColor: '#000',
+  btnBg:   '#e8ff47',
+  btnText: '#0a0a0a',
+  camera: {
+    x:     0,
+    y:     0,
+    zoom:  1,
+    follow:'last',
+    lerp:  0.01,
+  },
+  walls: [
+    {x1:-250,y1:-6e7,x2:-250,y2:300, color:fvColor,thickness:5},
+    {x1:250, y1:-6e7,x2:250, y2:300, color:fvColor,thickness:5},
+    {x1:-250,y1:300, x2:-550,y2:800, color:fvColor,thickness:5},
+    {x1:250, y1:300, x2:550, y2:800, color:fvColor,thickness:5},
+    {x1:-550,y1:800, x2:-250,y2:1200,color:fvColor,thickness:5},
+    {x1:550, y1:800, x2:250, y2:1200,color:fvColor,thickness:5},
+    {x1:-250,y1:1200,x2:-250,y2:1600,color:fvColor,thickness:5},
+    {x1:250, y1:1200,x2:250, y2:1600,color:fvColor,thickness:5},
+    {x1:-100,y1:1600,x2:-100,y2:2600,color:fvColor,thickness:5},
+    {x1:100, y1:1600,x2:100, y2:2200,color:fvColor,thickness:5},
+    {x1:-100,y1:1600,x2:-300,y2:2000,color:fvColor,thickness:5},
+    {x1:100, y1:1600,x2:300, y2:1800,color:fvColor,thickness:5},
+    {x1:-250,y1:1600,x2:-450,y2:2000,color:fvColor,thickness:5},
+    {x1:250, y1:1600,x2:450, y2:1800,color:fvColor,thickness:5},
+    {x1:450, y1:1800,x2:100, y2:2500,color:fvColor,thickness:5},
+    {x1:300, y1:1800,x2:100, y2:2200,color:fvColor,thickness:5},
+    {x1:-450,y1:2000,x2:-450,y2:2400,color:fvColor,thickness:5},
+    {x1:-450,y1:2400,x2:-250,y2:2600,color:fvColor,thickness:5},
+    {x1:-300,y1:2000,x2:-300,y2:2400,color:fvColor,thickness:5},
+    {x1:-300,y1:2400,x2:-100,y2:2600,color:fvColor,thickness:5},
+    {x1:100, y1:2500,x2:100, y2:3000,color:fvColor,thickness:5},
+    {x1:-250,y1:2600,x2:-250,y2:3000,color:fvColor,thickness:5},
+    {x1:-250,y1:3000,x2:-200,y2:3050,color:fvColor,thickness:5},
+    {x1:-200,y1:3050,x2:-450,y2:3300,color:fvColor,thickness:5},
+    {x1:50,  y1:3050,x2:300, y2:3300,color:fvColor,thickness:5},
+    {x1:100, y1:3000,x2:50,  y2:3050,color:fvColor,thickness:5},
+    {x1:300, y1:3300,x2:300, y2:4800,color:fvColor,thickness:5},
+    {x1:-450,y1:3300,x2:-450,y2:4800,color:fvColor,thickness:5},
+    {x1:300, y1:4800,x2:-50, y2:5200,color:fvColor,thickness:5},
+    {x1:-450,y1:4800,x2:-100,y2:5200,color:fvColor,thickness:5},
+    {x1:-50, y1:5200,x2:-50, y2:6000,color:fvColor,thickness:5},
+    {x1:-100,y1:5200,x2:-100,y2:6000,color:fvColor,thickness:5},
+    {x1:-375,y1:4700,x2:-375,y2:4800,color:fvColor,thickness:5},
+    {x1:-175,y1:4750,x2:-175,y2:4850,color:fvColor,thickness:5},
+    {x1:25,  y1:4750,x2:25,  y2:4850,color:fvColor,thickness:5},
+    {x1:225, y1:4700,x2:225, y2:4800,color:fvColor,thickness:5},
+  ],
+  movingWalls: [
+    {x:0,    y:5250, length:200, angleDeg:0, speed:1,  color:fvColor, thickness:10},
+    {x:25,   y:2900, length:220, angleDeg:0, speed:5,  color:fvColor, thickness:10},
+    {x:-175, y:2900, length:220, angleDeg:0, speed:-5, color:fvColor, thickness:10},
+    {x:225,  y:4700, length:220, angleDeg:0, speed:5,  color:fvColor, thickness:10},
+    {x:25,   y:4750, length:220, angleDeg:0, speed:-5, color:fvColor, thickness:10},
+    {x:-175, y:4750, length:220, angleDeg:0, speed:5,  color:fvColor, thickness:10},
+    {x:-375, y:4700, length:220, angleDeg:0, speed:-5, color:fvColor, thickness:10},
+    {x:225,  y:4800, length:220, angleDeg:0, speed:5,  color:fvColor, thickness:10},
+    {x:25,   y:4850, length:220, angleDeg:0, speed:-5, color:fvColor, thickness:10},
+    {x:-175, y:4850, length:220, angleDeg:0, speed:5,  color:fvColor, thickness:10},
+    {x:-375, y:4800, length:220, angleDeg:0, speed:-5, color:fvColor, thickness:10},
+    {x:-375, y:4500, length:220, angleDeg:0, speed:5,  color:fvColor, thickness:10},
+    {x:225,  y:4500, length:220, angleDeg:0, speed:-5, color:fvColor, thickness:10},
+  ],
+  pegs: [
+    {x:-350, y:700,  r:10},{x:-250, y:700,  r:10},{x:-150, y:700,  r:10},{x:-50,  y:700,  r:10},
+    {x:50,   y:700,  r:10},{x:150,  y:700,  r:10},{x:250,  y:700,  r:10},{x:350,  y:700,  r:10},
+    {x:-400, y:800,  r:10},{x:-300, y:800,  r:10},{x:-200, y:800,  r:10},{x:-100, y:800,  r:10},
+    {x:0,    y:800,  r:10},{x:100,  y:800,  r:10},{x:200,  y:800,  r:10},{x:300,  y:800,  r:10},{x:400, y:800, r:10},
+    {x:-350, y:900,  r:10},{x:-250, y:900,  r:10},{x:-150, y:900,  r:10},{x:-50,  y:900,  r:10},
+    {x:50,   y:900,  r:10},{x:150,  y:900,  r:10},{x:250,  y:900,  r:10},{x:350,  y:900,  r:10},
+    {x:-180, y:1500, r:10},{x:-90,  y:1500, r:10},{x:0,    y:1500, r:10},{x:90,   y:1500, r:10},{x:180, y:1500, r:10},
+    {x:-180, y:1400, r:10},{x:-90,  y:1400, r:10},{x:0,    y:1400, r:10},{x:90,   y:1400, r:10},{x:180, y:1400, r:10},
+    {x:-375, y:4500, r:10},{x:-275, y:4500, r:10},{x:-175, y:4500, r:10},{x:-75,  y:4500, r:10},{x:-175,y:4500, r:10},{x:25, y:4500, r:10},{x:125, y:4500, r:10},{x:225, y:4500, r:10},
+    {x:-375, y:4300, r:10},{x:-275, y:4300, r:10},{x:-175, y:4300, r:10},{x:-75,  y:4300, r:10},{x:-175,y:4300, r:10},{x:25, y:4300, r:10},{x:125, y:4300, r:10},{x:225, y:4300, r:10},
+    {x:-375, y:4100, r:10},{x:-275, y:4100, r:10},{x:-175, y:4100, r:10},{x:-75,  y:4100, r:10},{x:-175,y:4100, r:10},{x:25, y:4100, r:10},{x:125, y:4100, r:10},{x:225, y:4100, r:10},
+    {x:-375, y:3900, r:10},{x:-275, y:3900, r:10},{x:-175, y:3900, r:10},{x:-75,  y:3900, r:10},{x:-175,y:3900, r:10},{x:25, y:3900, r:10},{x:125, y:3900, r:10},{x:225, y:3900, r:10},
+    {x:-325, y:3800, r:10},{x:-225, y:3800, r:10},{x:-125, y:3800, r:10},{x:-25,  y:3800, r:10},{x:75,  y:3800, r:10},{x:175, y:3800, r:10},
+    {x:-325, y:4000, r:10},{x:-225, y:4000, r:10},{x:-125, y:4000, r:10},{x:-25,  y:4000, r:10},{x:75,  y:4000, r:10},{x:175, y:4000, r:10},
+    {x:-325, y:4200, r:10},{x:-225, y:4200, r:10},{x:-125, y:4200, r:10},{x:-25,  y:4200, r:10},{x:75,  y:4200, r:10},{x:175, y:4200, r:10},
+    {x:-325, y:4400, r:10},{x:-225, y:4400, r:10},{x:-125, y:4400, r:10},{x:-25,  y:4400, r:10},{x:75,  y:4400, r:10},{x:175, y:4400, r:10},
+  ],
+  balls: [],
+  gravity:       1.0,
+  pegBounciness: 0.72,
+  marbleBounce:  0.42,
+  friction:      0.04,
+  frictionAir:   0.007,
+  density:       0.003,
+  marbleRadius:  18,
+  exitY:         6000,
+};
+let currentZoom = CONFIG.camera.zoom;
+const baseZoom  = CONFIG.camera.zoom;
+let movingBodies = [];
+const {Engine, Bodies, Body, World} = Matter;
+const MR = CONFIG.marbleRadius;
+const EXIT_Y = () => CONFIG.exitY;
+function borderColor(color) {
+  const m = color.match(/hsl\(\s*([\d.]+)\s*,\s*([\d.]+)%\s*,\s*([\d.]+)%\s*\)/);
+  if (!m) return color;
+  return `hsl(${m[1]},${Math.max(0, +m[2]-20)}%,${m[3]}%)`;
+}
+const cv  = document.getElementById('c');
+const ctx = cv.getContext('2d');
+function resize() { cv.width=window.innerWidth; cv.height=window.innerHeight; }
+resize();
+window.addEventListener('resize', ()=>{ resize(); if(state==='idle') render(); });
+let eng, world;
+function wallBody(w) {
+  const dx=w.x2-w.x1, dy=w.y2-w.y1, len=Math.hypot(dx,dy);
+  return Bodies.rectangle(
+    (w.x1+w.x2)/2, (w.y1+w.y2)/2, len, 10,
+    {isStatic:true, friction:.2, restitution:.4, angle:Math.atan2(dy,dx)}
+  );
+}
+function setupPhys() {
+  eng   = Engine.create({gravity:{y:CONFIG.gravity}});
+  world = eng.world;
+  CONFIG.walls.forEach(w => World.add(world, wallBody(w)));
+  CONFIG.pegs.forEach(p =>
+    World.add(world, Bodies.circle(p.x,p.y,p.r,
+      {isStatic:true, friction:0, restitution:CONFIG.pegBounciness}))
+  );
+  movingBodies = [];
+  CONFIG.movingWalls.forEach(mw => {
+    const rad = mw.angleDeg * Math.PI / 180;
+    const b   = Bodies.rectangle(mw.x, mw.y, mw.length, mw.thickness,
+      {isStatic: true, friction: .2, restitution: .4, angle: rad});
+    movingBodies.push({body: b, cfg: mw, angle: mw.angleDeg});
+    World.add(world, b);
+  });
+}
+let marbles=[], state='idle', winner=null;
+let animId=null, spawnTm=null, allSpawned=false;
+function spawnBall(cfg) {
+  const b = Bodies.circle(cfg.spawnX, cfg.spawnY, MR, {
+    restitution: CONFIG.marbleBounce,
+    friction:    CONFIG.friction,
+    frictionAir: CONFIG.frictionAir,
+    density:     CONFIG.density,
+  });
+  Body.setVelocity(b, {x:0, y:0});
+  marbles.push({
+    body:   b,
+    name:   cfg.name,
+    fill:   cfg.color,
+    stroke: borderColor(cfg.color),
+    exited: false,
+  });
+  World.add(world, b);
+}
+function runSpawn(q) {
+  if (!q.length) { allSpawned=true; return; }
+  spawnBall(q.shift());
+  runSpawn(q);
+}
+function cleanup() {
+  if (animId)  cancelAnimationFrame(animId), animId=null;
+  if (spawnTm) clearTimeout(spawnTm), spawnTm=null;
+  if (eng)     { World.clear(world); Engine.clear(eng); }
+  marbles=[]; movingBodies=[]; state='idle'; winner=null; allSpawned=false;
+}
+function start() {
+  cleanup();
+  const raw = document.getElementById('nameInput').value;
+  const names = parseNames(raw);
+  if (!names.length) return;
+  CONFIG.balls = makeBalls(names);
+  setupPhys();
+  state='run'; allSpawned=false;
+  document.getElementById('winnerBadge').style.display='none';
+  camX=CONFIG.camera.x; camY=CONFIG.camera.y;
+  runSpawn([...CONFIG.balls]);
+  animId=requestAnimationFrame(tick);
+}
+function checkWin() {
+  marbles.forEach(m=>{
+    if (!m.exited && m.body.position.y > EXIT_Y()+MR*2) m.exited=true;
+  });
+  if (!winner && allSpawned) {
+    const live=marbles.filter(m=>!m.exited);
+    if (live.length===1)                        declareWin(live[0]);
+    else if (live.length===0 && marbles.length) declareWin(marbles[marbles.length-1]);
+    live.forEach(m=>{
+      const v=m.body.velocity;
+      if (Math.hypot(v.x,v.y)<.3)
+        Body.applyForce(m.body,m.body.position,{x:(Math.random()-.5)*.008,y:-.005});
+    });
+  }
+}
+function declareWin(m) {
+  winner=m;
+  const el=document.getElementById('winnerBadge');
+  el.textContent='winner : '+m.name;
+  el.style.color=m.fill; el.style.borderColor=m.stroke;
+  el.style.display='block';
+}
+let camX=CONFIG.camera.x, camY=CONFIG.camera.y;
+function updateCamera() {
+  const cfg=CONFIG.camera;
+  let tx=cfg.x, ty=cfg.y;
+  if (state==='run') {
+    const live   = marbles.filter(m=>!m.exited);
+    const exited = marbles.filter(m=>m.exited);
+    if (cfg.follow === 'last') {
+      if (exited.length > 0 && live.length > 0) {
+        const top = live.reduce((a,b)=> a.body.position.y < b.body.position.y ? a : b);
+        tx = top.body.position.x;
+        ty = top.body.position.y;
+      } else if (live.length > 0) {
+        const bottom = live.reduce((a,b)=> a.body.position.y > b.body.position.y ? a : b);
+        tx = bottom.body.position.x;
+        ty = bottom.body.position.y;
+      }
+    } else if (cfg.follow !== null) {
+      const t = marbles.find(m=>m.name===cfg.follow&&!m.exited);
+      if (t) { tx=t.body.position.x; ty=t.body.position.y; }
+    }
+  }
+  camX+=(tx-camX)*cfg.lerp;
+  camY+=(ty-camY)*cfg.lerp;
+}
+function drawBall(x, y, fill, stroke, name) {
+  ctx.beginPath(); ctx.arc(x,y,MR,0,Math.PI*2);
+  ctx.fillStyle=fill; ctx.fill();
+  ctx.strokeStyle=stroke; ctx.lineWidth=2.5; ctx.stroke();
+  if (name) {
+    ctx.save();
+    ctx.textAlign='center'; ctx.textBaseline='top';
+    ctx.font=`11px system-ui`;
+    ctx.fillStyle=fill;
+    ctx.shadowColor='rgba(0,0,0,.95)'; ctx.shadowBlur=4;
+    ctx.fillText(name, x, y+MR+4);
+    ctx.restore();
+  }
+}
+function render() {
+  const zoom = currentZoom;
+  const hw=cv.width/2, hh=cv.height/2;
+  ctx.fillStyle=CONFIG.bgColor;
+  ctx.fillRect(0,0,cv.width,cv.height);
+  ctx.save();
+  ctx.translate(hw, hh);
+  ctx.scale(zoom, zoom);
+  ctx.translate(-camX, -camY);
+  CONFIG.walls.forEach(w=>{
+    ctx.strokeStyle=w.color; ctx.lineWidth=w.thickness;
+    ctx.beginPath(); ctx.moveTo(w.x1,w.y1); ctx.lineTo(w.x2,w.y2); ctx.stroke();
+  });
+  movingBodies.forEach(mw => {
+    const rad = mw.angle * Math.PI / 180;
+    const hx  = Math.cos(rad) * mw.cfg.length / 2;
+    const hy  = Math.sin(rad) * mw.cfg.length / 2;
+    ctx.strokeStyle = mw.cfg.color;
+    ctx.lineWidth   = mw.cfg.thickness;
+    ctx.beginPath();
+    ctx.moveTo(mw.cfg.x - hx, mw.cfg.y - hy);
+    ctx.lineTo(mw.cfg.x + hx, mw.cfg.y + hy);
+    ctx.stroke();
+  });
+  CONFIG.pegs.forEach(p=>{
+    ctx.beginPath(); ctx.arc(p.x,p.y,p.r,0,Math.PI*2);
+    ctx.fillStyle='rgba(0,0,0,.45)'; ctx.fill();
+    ctx.strokeStyle=fvColor; ctx.lineWidth=2; ctx.stroke();
+  });
+  if (state==='idle') {
+    CONFIG.balls.forEach(cfg=>{
+      drawBall(cfg.spawnX, cfg.spawnY, cfg.color, borderColor(cfg.color), cfg.name);
+    });
+  }
+  if (state==='run') {
+    marbles.forEach(({body:b, name, fill, stroke, exited})=>{
+      if (exited || b.position.y > EXIT_Y()+MR*4) return;
+      drawBall(b.position.x, b.position.y, fill, stroke, name);
+    });
+    if (winner && !winner.exited) {
+      const {x,y}=winner.body.position;
+      ctx.beginPath(); ctx.arc(x,y,MR+4,0,Math.PI*2);
+      ctx.strokeStyle=winner.fill; ctx.lineWidth=3.5; ctx.stroke();
+    }
+  }
+  ctx.restore();
+  if (state==='run' && marbles.length) {
+    const live = marbles.filter(m=>!m.exited);
+    const ranked = [...live].sort((a,b)=>a.body.position.y - b.body.position.y);
+    const px = cv.width - 150;
+    const py = 20;
+    const lh = 22;
+    ctx.save();
+    ctx.font = 'bold 12px system-ui';
+    ctx.textBaseline = 'top';
+    ranked.forEach((m, i) => {
+      const label = `#${i+1}  ${m.name}`;
+      ctx.fillStyle = m.fill;
+      ctx.shadowColor = 'rgba(0,0,0,.9)';
+      ctx.shadowBlur = 6;
+      ctx.fillText(label, px, py + i * lh);
+    });
+    const exited = marbles.filter(m=>m.exited);
+    exited.forEach((m, i) => {
+      ctx.fillStyle = 'rgba(120,120,120,.45)';
+      ctx.shadowBlur = 0;
+      ctx.fillText(`--  ${m.name}`, px, py + (ranked.length + i) * lh);
+    });
+    ctx.restore();
+  }
+}
+function tick() {
+  const steps = 10;
+  for (let i = 0; i < steps; i++) {
+    Engine.update(eng, 1000/60/steps);
+  }
+  movingBodies.forEach(mw => {
+    mw.angle += mw.cfg.speed;
+    const rad = mw.angle * Math.PI / 180;
+    Body.setAngle(mw.body, rad);
+    Body.setPosition(mw.body, {x: mw.cfg.x, y: mw.cfg.y});
+  });
+
+  // 정체 감지 → 충격파
+  if (state === 'run' && allSpawned && !winner) {
+    const live = marbles.filter(m => !m.exited);
+    live.forEach(m => {
+      const speed = Math.hypot(m.body.velocity.x, m.body.velocity.y);
+      if (speed < 1) {
+        m._stuckFrames = (m._stuckFrames || 0) + 1;
+        if (m._stuckFrames > 120) {
+          m._stuckFrames = 0;
+          const sx = m.body.position.x;
+          const sy = m.body.position.y;
+          live.forEach(t => {
+            const dx = t.body.position.x - sx;
+            const dy = t.body.position.y - sy;
+            const dist = Math.max(Math.hypot(dx, dy), 1);
+            const power = 67000 / dist;
+            Body.applyForce(t.body, t.body.position, {
+              x: (dx/dist) * power * 0.001,
+              y: (dy/dist) * power * 0.001 - 0.05,
+            });
+          });
+        }
+      } else {
+        m._stuckFrames = 0;
+      }
+    });
+  }
+  checkWin(); updateCamera(); render();
+  animId=requestAnimationFrame(tick);
+}
+const btn=document.getElementById('startBtn');
+btn.style.background=CONFIG.btnBg; btn.style.color=CONFIG.btnText;
+btn.onclick=()=>{
+  if (state==='run') {
+    cleanup(); camX=CONFIG.camera.x; camY=CONFIG.camera.y;
+    render(); btn.textContent='▶ START';
+  } else {
+    start(); btn.textContent='■ STOP';
+  }
+};
+camX=CONFIG.camera.x; camY=CONFIG.camera.y;
+document.getElementById('nameInput').addEventListener('input', () => {
+  if (state !== 'idle') return;
+  const names = parseNames(document.getElementById('nameInput').value);
+  if (names.length) CONFIG.balls = makeBalls(names);
+  render();
+});
+const _initNames = parseNames(document.getElementById('nameInput').value);
+if (_initNames.length) CONFIG.balls = makeBalls(_initNames);
+render();
+</script>
+</body>
+</html>
