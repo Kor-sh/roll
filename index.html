@@ -40,6 +40,9 @@ canvas{display:block;position:fixed;inset:0}
 <script src="https://cdnjs.cloudflare.com/ajax/libs/matter-js/0.19.0/matter.min.js"></script>
 <script>
 const fvColor = '#FFFFFF'
+// Matter 모듈 추출 시 필요한 도구들(Events, Vector) 추가
+const {Engine, Bodies, Body, World, Events, Vector} = Matter;
+
 function wallByAngle(cx, cy, length, angleDeg, color, thickness) {
   const rad = angleDeg * Math.PI / 180;
   const hx  = Math.cos(rad) * length / 2;
@@ -50,11 +53,15 @@ function parseNames(raw) {
   const tokens = raw.trim().split(/\s+/).filter(Boolean);
   const result = [];
   tokens.forEach(t => {
-    const m = t.match(/^(\d+)~(\d+)$/);
-    if (m) {
-      const a = +m[1], b = +m[2];
+    const range = t.match(/^(\d+)~(\d+)$/);
+    const multi = t.match(/^(.+)\*(\d+)$/);
+    if (range) {
+      const a = +range[1], b = +range[2];
       const step = a <= b ? 1 : -1;
       for (let i = a; i !== b + step; i += step) result.push(String(i));
+    } else if (multi) {
+      const name = multi[1], count = +multi[2];
+      for (let i = 0; i < count; i++) result.push(name);
     } else {
       result.push(t);
     }
@@ -79,11 +86,11 @@ let CONFIG = {
   btnBg:   '#e8ff47',
   btnText: '#0a0a0a',
   camera: {
-    x:     0,
-    y:     0,
-    zoom:  1,
+    x:      0,
+    y:      0,
+    zoom:   1,
     follow:'last',
-    lerp:  0.01,
+    lerp:   0.1,
   },
   walls: [
     {x1:-250,y1:-6e7,x2:-250,y2:300, color:fvColor,thickness:5},
@@ -157,19 +164,18 @@ let CONFIG = {
     {x:-325, y:4400, r:10},{x:-225, y:4400, r:10},{x:-125, y:4400, r:10},{x:-25,  y:4400, r:10},{x:75,  y:4400, r:10},{x:175, y:4400, r:10},
   ],
   balls: [],
-  gravity:       1.0,
+  gravity:        1.0,
   pegBounciness: 0.72,
   marbleBounce:  0.42,
-  friction:      0.04,
+  friction:       0.04,
   frictionAir:   0.007,
-  density:       0.003,
+  density:        0.003,
   marbleRadius:  18,
-  exitY:         6000,
+  exitY:          6000,
 };
 let currentZoom = CONFIG.camera.zoom;
 const baseZoom  = CONFIG.camera.zoom;
 let movingBodies = [];
-const {Engine, Bodies, Body, World} = Matter;
 const MR = CONFIG.marbleRadius;
 const EXIT_Y = () => CONFIG.exitY;
 function borderColor(color) {
@@ -203,8 +209,32 @@ function setupPhys() {
     const rad = mw.angleDeg * Math.PI / 180;
     const b   = Bodies.rectangle(mw.x, mw.y, mw.length, mw.thickness,
       {isStatic: true, friction: .2, restitution: .4, angle: rad});
-    movingBodies.push({body: b, cfg: mw, angle: mw.angleDeg});
+    // 각속도 계산을 위한 속성 추가 (av)
+    movingBodies.push({body: b, cfg: mw, angle: mw.angleDeg, av: (mw.speed * Math.PI / 180)});
     World.add(world, b);
+  });
+
+  // ★ 움직이는 벽 물리 엔진 보정 로직 (관성 추가)
+  Events.on(eng, 'collisionActive', (event) => {
+    event.pairs.forEach(pair => {
+      let wallObj = movingBodies.find(mb => mb.body === pair.bodyA || mb.body === pair.bodyB);
+      let ballBody = pair.bodyA.isStatic ? pair.bodyB : pair.bodyA;
+      
+      if (wallObj && !ballBody.isStatic) {
+        const contactPoint = pair.activeContacts[0].vertex;
+        const offset = Vector.sub(contactPoint, wallObj.body.position);
+        // V = ω × r (회전 관성 속도 계산)
+        const tangentVel = {
+          x: -wallObj.av * offset.y * 1.5, 
+          y: wallObj.av * offset.x * 1.5
+        };
+        // 구슬의 기존 속도에 벽의 회전력을 더함
+        Body.setVelocity(ballBody, {
+          x: ballBody.velocity.x + tangentVel.x * 0.2,
+          y: ballBody.velocity.y + tangentVel.y * 0.2
+        });
+      }
+    });
   });
 }
 let marbles=[], state='idle', winner=null;
@@ -392,9 +422,7 @@ function tick() {
     const rad = mw.angle * Math.PI / 180;
     Body.setAngle(mw.body, rad);
     Body.setPosition(mw.body, {x: mw.cfg.x, y: mw.cfg.y});
-  });
-
-  // 정체 감지 → 충격파
+  }); 
   if (state === 'run' && allSpawned && !winner) {
     const live = marbles.filter(m => !m.exited);
     live.forEach(m => {
