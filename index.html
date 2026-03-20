@@ -8,20 +8,24 @@
 *{box-sizing:border-box;margin:0;padding:0}
 html,body{width:100%;height:100%;overflow:hidden}
 canvas{display:block;position:fixed;inset:0}
-#ui{position:fixed;bottom:28px;left:50%;transform:translateX(-50%);display:flex;gap:10px;align-items:center;z-index:10}
-#startBtn{padding:11px 34px;font-size:13px;font-weight:700;border:none;border-radius:6px;cursor:pointer;font-family:system-ui;letter-spacing:.05em}
+#ui{position:fixed;bottom:28px;left:28px;display:flex;flex-direction:row;gap:14px;align-items:flex-end;z-index:10}
+#startBtn{padding:33px 40px;font-size:39px;font-weight:700;border:none;border-radius:18px;cursor:pointer;font-family:system-ui;letter-spacing:.05em;white-space:nowrap}
 #startBtn:active{opacity:.8}
-#winnerBadge{padding:9px 20px;border-radius:6px;border:2px solid;font-size:14px;font-weight:700;font-family:system-ui;display:none;background:rgba(8,8,20,.9)}
+#winnerBadge{
+  padding:27px 60px;border-radius:18px;border:6px solid;
+  font-size:42px;font-weight:700;font-family:system-ui;
+  display:none;background:rgba(8,8,20,.9);
+  white-space:nowrap;align-self:flex-end;
+}
 #nameInput{
-  position:fixed;top:20px;left:20px;
-  width:220px;height:80px;
+  width:400px;height:120px;
   background:rgba(0,0,0,.7);
-  border:1px solid #333;
-  border-radius:6px;
+  border:3px solid #333;
+  border-radius:18px;
   color:#fff;
-  font-size:13px;
+  font-size:22px;
   font-family:system-ui;
-  padding:8px;
+  padding:16px;
   resize:none;
   outline:none;
   z-index:10;
@@ -32,17 +36,19 @@ canvas{display:block;position:fixed;inset:0}
 </head>
 <body>
 <canvas id="c"></canvas>
-<textarea id="nameInput" placeholder="이름 입력&#10;띄어쓰기로 구분&#10;1~3 → 1 2 3">1~34</textarea>
 <div id="ui">
+  <textarea id="nameInput" placeholder="이름 입력&#10;띄어쓰기로 구분&#10;1~3 → 1 2 3">1~34</textarea>
   <button id="startBtn">▶ START</button>
   <div id="winnerBadge"></div>
 </div>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/matter-js/0.19.0/matter.min.js"></script>
 <script>
 const fvColor = '#FFFFFF'
-// Matter 모듈 추출 시 필요한 도구들(Events, Vector) 추가
 const {Engine, Bodies, Body, World, Events, Vector} = Matter;
-
+const TRACK_WIDTH = 1200;
+function getZoom() {
+  return Math.min(window.innerWidth / TRACK_WIDTH, window.innerHeight / 900);
+}
 function wallByAngle(cx, cy, length, angleDeg, color, thickness) {
   const rad = angleDeg * Math.PI / 180;
   const hx  = Math.cos(rad) * length / 2;
@@ -134,7 +140,6 @@ let CONFIG = {
     {x:0,    y:5250, length:200, angleDeg:0, speed:1,  color:fvColor, thickness:10},
     {x:25,   y:2900, length:220, angleDeg:0, speed:5,  color:fvColor, thickness:10},
     {x:-175, y:2900, length:220, angleDeg:0, speed:-5, color:fvColor, thickness:10},
-
     {x:225,  y:4700, length:220, angleDeg:0, speed:5,  color:fvColor, thickness:10},
     {x:25,   y:4800, length:220, angleDeg:0, speed:-5, color:fvColor, thickness:10},
     {x:-175, y:4800, length:220, angleDeg:0, speed:5,  color:fvColor, thickness:10},
@@ -174,9 +179,7 @@ let CONFIG = {
   marbleRadius:  18,
   exitY:          6000,
 };
-let currentZoom = CONFIG.camera.zoom;
-const baseZoom  = CONFIG.camera.zoom;
-let movingBodies = [];
+let currentZoom = getZoom();
 const MR = CONFIG.marbleRadius;
 const EXIT_Y = () => CONFIG.exitY;
 function borderColor(color) {
@@ -186,7 +189,11 @@ function borderColor(color) {
 }
 const cv  = document.getElementById('c');
 const ctx = cv.getContext('2d');
-function resize() { cv.width=window.innerWidth; cv.height=window.innerHeight; }
+function resize() {
+  cv.width  = window.innerWidth;
+  cv.height = window.innerHeight;
+  currentZoom = getZoom();
+}
 resize();
 window.addEventListener('resize', ()=>{ resize(); if(state==='idle') render(); });
 let eng, world;
@@ -210,26 +217,20 @@ function setupPhys() {
     const rad = mw.angleDeg * Math.PI / 180;
     const b   = Bodies.rectangle(mw.x, mw.y, mw.length, mw.thickness,
       {isStatic: true, friction: .2, restitution: .4, angle: rad});
-    // 각속도 계산을 위한 속성 추가 (av)
     movingBodies.push({body: b, cfg: mw, angle: mw.angleDeg, av: (mw.speed * Math.PI / 180)});
     World.add(world, b);
   });
-
-  // ★ 움직이는 벽 물리 엔진 보정 로직 (관성 추가)
   Events.on(eng, 'collisionActive', (event) => {
     event.pairs.forEach(pair => {
       let wallObj = movingBodies.find(mb => mb.body === pair.bodyA || mb.body === pair.bodyB);
       let ballBody = pair.bodyA.isStatic ? pair.bodyB : pair.bodyA;
-      
       if (wallObj && !ballBody.isStatic) {
         const contactPoint = pair.activeContacts[0].vertex;
         const offset = Vector.sub(contactPoint, wallObj.body.position);
-        // V = ω × r (회전 관성 속도 계산)
         const tangentVel = {
           x: -wallObj.av * offset.y * 1.5, 
           y: wallObj.av * offset.x * 1.5
         };
-        // 구슬의 기존 속도에 벽의 회전력을 더함
         Body.setVelocity(ballBody, {
           x: ballBody.velocity.x + tangentVel.x * 0.2,
           y: ballBody.velocity.y + tangentVel.y * 0.2
@@ -240,6 +241,8 @@ function setupPhys() {
 }
 let marbles=[], state='idle', winner=null;
 let animId=null, spawnTm=null, allSpawned=false;
+let movingBodies = [];
+let exitCounter = 0;
 function spawnBall(cfg) {
   const b = Bodies.circle(cfg.spawnX, cfg.spawnY, MR, {
     restitution: CONFIG.marbleBounce,
@@ -254,6 +257,7 @@ function spawnBall(cfg) {
     fill:   cfg.color,
     stroke: borderColor(cfg.color),
     exited: false,
+    exitOrder: -1,
   });
   World.add(world, b);
 }
@@ -267,6 +271,7 @@ function cleanup() {
   if (spawnTm) clearTimeout(spawnTm), spawnTm=null;
   if (eng)     { World.clear(world); Engine.clear(eng); }
   marbles=[]; movingBodies=[]; state='idle'; winner=null; allSpawned=false;
+  exitCounter = 0;
 }
 function start() {
   cleanup();
@@ -283,7 +288,10 @@ function start() {
 }
 function checkWin() {
   marbles.forEach(m=>{
-    if (!m.exited && m.body.position.y > EXIT_Y()+MR*2) m.exited=true;
+    if (!m.exited && m.body.position.y > EXIT_Y()+MR*2) {
+      m.exited = true;
+      m.exitOrder = exitCounter++;
+    }
   });
   if (!winner && allSpawned) {
     const live=marbles.filter(m=>!m.exited);
@@ -328,19 +336,24 @@ function updateCamera() {
   camX+=(tx-camX)*cfg.lerp;
   camY+=(ty-camY)*cfg.lerp;
 }
-function drawBall(x, y, fill, stroke, name) {
+function drawBallCircle(x, y, fill, stroke) {
   ctx.beginPath(); ctx.arc(x,y,MR,0,Math.PI*2);
   ctx.fillStyle=fill; ctx.fill();
   ctx.strokeStyle=stroke; ctx.lineWidth=2.5; ctx.stroke();
-  if (name) {
-    ctx.save();
-    ctx.textAlign='center'; ctx.textBaseline='top';
-    ctx.font=`11px system-ui`;
-    ctx.fillStyle=fill;
-    ctx.shadowColor='rgba(0,0,0,.95)'; ctx.shadowBlur=4;
-    ctx.fillText(name, x, y+MR+4);
-    ctx.restore();
-  }
+}
+function drawBallLabel(x, y, fill, name) {
+  if (!name) return;
+  ctx.save();
+  ctx.textAlign='center'; ctx.textBaseline='top';
+  ctx.font=`18px system-ui`;
+  ctx.fillStyle=fill;
+  ctx.shadowColor='rgba(0,0,0,.95)'; ctx.shadowBlur=4;
+  ctx.fillText(name, x, y+MR+4);
+  ctx.restore();
+}
+function drawBall(x, y, fill, stroke, name) {
+  drawBallCircle(x, y, fill, stroke);
+  drawBallLabel(x, y, fill, name);
 }
 function render() {
   const zoom = currentZoom;
@@ -377,25 +390,30 @@ function render() {
     });
   }
   if (state==='run') {
-    marbles.forEach(({body:b, name, fill, stroke, exited})=>{
+    marbles.forEach(({body:b, fill, stroke, exited})=>{
       if (exited || b.position.y > EXIT_Y()+MR*4) return;
-      drawBall(b.position.x, b.position.y, fill, stroke, name);
+      drawBallCircle(b.position.x, b.position.y, fill, stroke);
     });
     if (winner && !winner.exited) {
       const {x,y}=winner.body.position;
       ctx.beginPath(); ctx.arc(x,y,MR+4,0,Math.PI*2);
       ctx.strokeStyle=winner.fill; ctx.lineWidth=3.5; ctx.stroke();
     }
+    marbles.forEach(({body:b, name, fill, exited})=>{
+      if (exited || b.position.y > EXIT_Y()+MR*4) return;
+      drawBallLabel(b.position.x, b.position.y, fill, name);
+    });
   }
   ctx.restore();
   if (state==='run' && marbles.length) {
     const live = marbles.filter(m=>!m.exited);
     const ranked = [...live].sort((a,b)=>a.body.position.y - b.body.position.y);
-    const px = cv.width - 150;
+    const fontSize = Math.max(10, Math.round(12 * zoom));
+    const lh = fontSize * 1.8;
+    const px = cv.width - Math.max(120, 150 * zoom);
     const py = 20;
-    const lh = 22;
     ctx.save();
-    ctx.font = 'bold 12px system-ui';
+    ctx.font = `bold ${fontSize}px system-ui`;
     ctx.textBaseline = 'top';
     ranked.forEach((m, i) => {
       const label = `#${i+1}  ${m.name}`;
@@ -404,11 +422,12 @@ function render() {
       ctx.shadowBlur = 6;
       ctx.fillText(label, px, py + i * lh);
     });
-    const exited = marbles.filter(m=>m.exited);
+    const exited = marbles.filter(m=>m.exited)
+                          .sort((a,b) => b.exitOrder - a.exitOrder);
     exited.forEach((m, i) => {
       ctx.fillStyle = 'rgba(120,120,120,.45)';
       ctx.shadowBlur = 0;
-      ctx.fillText(`--  ${m.name}`, px, py + (ranked.length + i) * lh);
+      ctx.fillText(`#${ranked.length + i + 1}  ${m.name}`, px, py + (ranked.length + i) * lh);
     });
     ctx.restore();
   }
@@ -458,6 +477,7 @@ btn.style.background=CONFIG.btnBg; btn.style.color=CONFIG.btnText;
 btn.onclick=()=>{
   if (state==='run') {
     cleanup(); camX=CONFIG.camera.x; camY=CONFIG.camera.y;
+    document.getElementById('winnerBadge').style.display='none';
     render(); btn.textContent='▶ START';
   } else {
     start(); btn.textContent='■ STOP';
