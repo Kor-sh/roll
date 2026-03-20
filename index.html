@@ -37,7 +37,7 @@ canvas{display:block;position:fixed;inset:0}
 <body>
 <canvas id="c"></canvas>
 <div id="ui">
-  <textarea id="nameInput" placeholder="이름 입력&#10;띄어쓰기로 구분&#10;1~3 → 1 2 3">1~34</textarea>
+  <textarea id="nameInput" placeholder="이름 입력&#10;띄어쓰기로 구분&#10;1~3 → 1 2 3">1~10</textarea>
   <button id="startBtn">▶ START</button>
   <div id="winnerBadge"></div>
 </div>
@@ -125,50 +125,32 @@ let CONFIG = {
     {x1:-200,y1:3050,x2:-450,y2:3300,color:fvColor,thickness:5},
     {x1:50,  y1:3050,x2:300, y2:3300,color:fvColor,thickness:5},
     {x1:100, y1:3000,x2:50,  y2:3050,color:fvColor,thickness:5},
-    
-    {x1:300, y1:3300,x2:300, y2:3750,color:fvColor,thickness:5},
-    {x1:-450,y1:3300,x2:-450,y2:3750,color:fvColor,thickness:5},
-    {x1:300, y1:3850,x2:300, y2:4550,color:fvColor,thickness:5},
-    {x1:-450,y1:3850,x2:-450,y2:4550,color:fvColor,thickness:5},
 
     {x1:250, y1:3800,x2:300, y2:3750,color:fvColor,thickness:5},
     {x1:-400,y1:3800,x2:-450,y2:3750,color:fvColor,thickness:5},
     {x1:250, y1:3800,x2:300, y2:3850,color:fvColor,thickness:5},
     {x1:-400,y1:3800,x2:-450,y2:3850,color:fvColor,thickness:5},
+    
+    {x1:300, y1:3300,x2:300, y2:3750,color:fvColor,thickness:5},
+    {x1:-450,y1:3300,x2:-450,y2:3750,color:fvColor,thickness:5},
+    {x1:300, y1:3850,x2:300, y2:4050,color:fvColor,thickness:5},
+    {x1:-450,y1:3850,x2:-450,y2:4050,color:fvColor,thickness:5},
 
-    {x1:300, y1:4550,x2:-40, y2:4900,color:fvColor,thickness:5},
-    {x1:-450,y1:4550,x2:-110,y2:4900,color:fvColor,thickness:5},
-    {x1:-40, y1:4900,x2:-40, y2:6000,color:fvColor,thickness:5},
-    {x1:-110,y1:4900,x2:-110,y2:6000,color:fvColor,thickness:5},
 
-    {x1:215, y1:4150,x2:235, y2:4250,color:fvColor,thickness:5},
-    {x1:235, y1:4300,x2:215, y2:4400,color:fvColor,thickness:5},
-
-    {x1:115, y1:4150,x2:135, y2:4250,color:fvColor,thickness:5},
-    {x1:135, y1:4300,x2:115, y2:4400,color:fvColor,thickness:5},
-
-    {x1:15,  y1:4150,x2:35,  y2:4250,color:fvColor,thickness:5},
-    {x1:35,  y1:4300,x2:15,  y2:4400,color:fvColor,thickness:5},
-
-    {x1:-85, y1:4150,x2:-65, y2:4250,color:fvColor,thickness:5},
-    {x1:-65, y1:4300,x2:-85, y2:4400,color:fvColor,thickness:5},
-
-    {x1:-185,y1:4150,x2:-165,y2:4250,color:fvColor,thickness:5},
-    {x1:-165,y1:4300,x2:-185,y2:4400,color:fvColor,thickness:5},
-
-    {x1:-285,y1:4150,x2:-265,y2:4250,color:fvColor,thickness:5},
-    {x1:-265,y1:4300,x2:-285,y2:4400,color:fvColor,thickness:5},
-
-    {x1:-385,y1:4150,x2:-365,y2:4250,color:fvColor,thickness:5},
-    {x1:-365,y1:4300,x2:-385,y2:4400,color:fvColor,thickness:5},
+    {x1:300, y1:4050,x2:-40, y2:4400,color:fvColor,thickness:5},
+    {x1:-450,y1:4050,x2:-110,y2:4400,color:fvColor,thickness:5},
+    {x1:-40, y1:4400,x2:-40, y2:6000,color:fvColor,thickness:5},
+    {x1:-110,y1:4400,x2:-110,y2:6000,color:fvColor,thickness:5},
   ],
   movingWalls: [
-    {x:0,    y:4950, length:200, angleDeg:0, speed:1,  color:fvColor, thickness:10},
+    {x:0,    y:4450, length:200, angleDeg:0, speed:1,  color:fvColor, thickness:10},
     {x:25,   y:2900, length:220, angleDeg:0, speed:5,  color:fvColor, thickness:10},
     {x:-175, y:2900, length:220, angleDeg:0, speed:-5, color:fvColor, thickness:10},
+    {x:25,   y:2700, length:220, angleDeg:0, speed:-5, color:fvColor, thickness:10},
+    {x:-175, y:2700, length:220, angleDeg:0, speed:5,  color:fvColor, thickness:10},
 
-    {x:300,  y:4000, length:250, angleDeg:0, speed:6,  color:fvColor, thickness:10},
-    {x:-450, y:4000, length:250, angleDeg:0, speed:-6, color:fvColor, thickness:10},
+    {x:300,  y:4050, length:250, angleDeg:0, speed:6,  color:fvColor, thickness:10},
+    {x:-450, y:4050, length:250, angleDeg:0, speed:-6, color:fvColor, thickness:10},
   ],
   pegs: [
     {x:-350, y:700,  r:10},{x:-250, y:700,  r:10},{x:-150, y:700,  r:10},{x:-50,  y:700,  r:10},
@@ -197,7 +179,7 @@ let CONFIG = {
   frictionAir:   0.01,
   density:        0.003,
   marbleRadius:  18,
-  exitY:          6000,
+  exitY:          5000,
 };
 let currentZoom = getZoom();
 const MR = CONFIG.marbleRadius;
